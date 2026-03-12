@@ -26,6 +26,15 @@ const exportButtons = [
   document.getElementById("heroExportButton"),
 ].filter(Boolean);
 
+const PDF_PAGE_WIDTH = 595.28;
+const PDF_PAGE_HEIGHT = 841.89;
+const PDF_MARGIN = 42;
+const PDF_CONTENT_WIDTH = PDF_PAGE_WIDTH - PDF_MARGIN * 2;
+const PDF_META_GAP = 12;
+const PDF_COLUMN_GAP = 22;
+const PDF_COLUMN_WIDTH = (PDF_CONTENT_WIDTH - PDF_COLUMN_GAP) / 2;
+let recipePdfAssetsPromise = null;
+
 function loadLikes() {
   try {
     const raw = localStorage.getItem("recipe-notebook-likes");
@@ -75,6 +84,213 @@ function createRecipeImage(recipe) {
       <text x="60" y="496" fill="#fff8ef" font-size="56" font-family="'Newsreader', serif">${recipe.title}</text>
     </svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function hexToRgbObject(hex) {
+  const normalized = hex.replace("#", "");
+  const value = parseInt(normalized, 16);
+  return {
+    r: ((value >> 16) & 255) / 255,
+    g: ((value >> 8) & 255) / 255,
+    b: (value & 255) / 255,
+  };
+}
+
+function pdfColor(PDFLib, hex) {
+  const { r, g, b } = hexToRgbObject(hex);
+  return PDFLib.rgb(r, g, b);
+}
+
+function wrapPdfText(text, font, size, maxWidth) {
+  const lines = [];
+  const paragraphs = String(text).split("\n");
+
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (!paragraph) {
+      lines.push("");
+      return;
+    }
+
+    let current = "";
+    for (const char of paragraph) {
+      const candidate = current + char;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth || !current) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = char;
+      }
+    }
+    if (current) {
+      lines.push(current);
+    }
+
+    if (paragraphIndex < paragraphs.length - 1) {
+      lines.push("");
+    }
+  });
+
+  return lines;
+}
+
+function drawWrappedText(page, text, options) {
+  const {
+    font,
+    size,
+    x,
+    y,
+    width,
+    lineHeight,
+    color,
+  } = options;
+  const lines = wrapPdfText(text, font, size, width);
+  let cursorY = y;
+
+  lines.forEach((line) => {
+    if (line) {
+      page.drawText(line, {
+        x,
+        y: cursorY - size,
+        size,
+        font,
+        color,
+      });
+    }
+    cursorY -= lineHeight;
+  });
+
+  return cursorY;
+}
+
+function drawSectionTitle(page, PDFLib, text, x, y, width, font) {
+  page.drawText(text, {
+    x,
+    y: y - 12,
+    size: 12,
+    font,
+    color: pdfColor(PDFLib, "#8f3d4e"),
+  });
+  page.drawLine({
+    start: { x, y: y - 18 },
+    end: { x: x + width, y: y - 18 },
+    thickness: 1,
+    color: pdfColor(PDFLib, "#d8cab8"),
+  });
+  return y - 28;
+}
+
+function drawBanner(page, PDFLib, recipe, font, topY) {
+  const primary = pdfColor(PDFLib, recipe.palette[0]);
+  const secondary = pdfColor(PDFLib, recipe.palette[1]);
+  const accent = pdfColor(PDFLib, recipe.palette[2]);
+  const bannerHeight = 132;
+  const bannerY = topY - bannerHeight;
+
+  page.drawRectangle({
+    x: PDF_MARGIN,
+    y: bannerY,
+    width: PDF_CONTENT_WIDTH,
+    height: bannerHeight,
+    color: secondary,
+  });
+  page.drawRectangle({
+    x: PDF_MARGIN,
+    y: bannerY + 18,
+    width: PDF_CONTENT_WIDTH,
+    height: bannerHeight - 18,
+    color: primary,
+    opacity: 0.88,
+  });
+  page.drawCircle({
+    x: PDF_PAGE_WIDTH - 110,
+    y: bannerY + 98,
+    size: 34,
+    color: PDFLib.rgb(1, 1, 1),
+    opacity: 0.15,
+  });
+  page.drawCircle({
+    x: PDF_MARGIN + 66,
+    y: bannerY + 36,
+    size: 42,
+    color: PDFLib.rgb(1, 1, 1),
+    opacity: 0.12,
+  });
+  page.drawRectangle({
+    x: PDF_MARGIN + 18,
+    y: bannerY + bannerHeight - 36,
+    width: 182,
+    height: 24,
+    color: PDFLib.rgb(1, 1, 1),
+    opacity: 0.82,
+  });
+  page.drawText(recipe.categoryLabel, {
+    x: PDF_MARGIN + 28,
+    y: bannerY + bannerHeight - 28,
+    size: 11,
+    font,
+    color: accent,
+  });
+  page.drawText(recipe.title, {
+    x: PDF_MARGIN + 24,
+    y: bannerY + 44,
+    size: 22,
+    font,
+    color: PDFLib.rgb(1, 1, 1),
+  });
+  return bannerY - 18;
+}
+
+function drawMetaRow(page, PDFLib, recipe, font, y) {
+  const metaItems = [
+    `时长 ${recipe.time}`,
+    `分量 ${recipe.servings}`,
+    `难度 ${recipe.difficulty}`,
+    `适合 ${recipe.season}`,
+  ];
+  let cursorX = PDF_MARGIN;
+  const boxHeight = 22;
+
+  metaItems.forEach((item) => {
+    const textWidth = font.widthOfTextAtSize(item, 10, {});
+    const width = textWidth + 18;
+    page.drawRectangle({
+      x: cursorX,
+      y: y - boxHeight,
+      width,
+      height: boxHeight,
+      color: PDFLib.rgb(1, 1, 1),
+      borderColor: pdfColor(PDFLib, "#dccdbd"),
+      borderWidth: 1,
+    });
+    page.drawText(item, {
+      x: cursorX + 9,
+      y: y - 15,
+      size: 10,
+      font,
+      color: pdfColor(PDFLib, "#6c6058"),
+    });
+    cursorX += width + PDF_META_GAP;
+  });
+
+  return y - 34;
+}
+
+function loadRecipePdfAssets() {
+  if (!recipePdfAssetsPromise) {
+    recipePdfAssetsPromise = (async () => {
+      const fontResponse = await fetch("./vendor/SourceHanSansSC-Regular.otf?v=20260312d");
+      if (!fontResponse.ok) {
+        throw new Error("Failed to load Source Han Sans font.");
+      }
+      return {
+        PDFLib: window.PDFLib,
+        fontkit: window.fontkit,
+        fontBytes: await fontResponse.arrayBuffer(),
+      };
+    })();
+  }
+
+  return recipePdfAssetsPromise;
 }
 
 function filteredRecipes() {
@@ -333,102 +549,6 @@ function renderSheet() {
   `;
 }
 
-function chunkRecipes(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
-
-function buildPdfMarkup() {
-  const groups = chunkRecipes(recipes, 2);
-  const now = new Date();
-  const exportDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
-  ).padStart(2, "0")}`;
-
-  const cover = `
-    <section class="print-page print-cover">
-      <div class="print-cover__panel">
-        <p class="print-kicker">Recipe Notebook Export</p>
-        <h1>家庭菜谱册 PDF</h1>
-        <p class="print-page__lede">
-          这份导出文档包含目录、11 个菜系索引，以及每道菜的配料用量、制作步骤与厨房提示。版式与首页保持同一套纸本菜谱风格。
-        </p>
-      </div>
-      <div class="print-page__footer">Exported on ${exportDate}</div>
-    </section>
-  `;
-
-  const toc = `
-    <section class="print-page">
-      <div class="print-section">
-        <p class="print-kicker">Table of contents</p>
-        <h2>目录</h2>
-        <ol class="print-toc">
-          ${recipes
-            .map(
-              (recipe, index) => `
-                <li>
-                  <span>${String(index + 1).padStart(2, "0")} · ${recipe.title}</span>
-                  <span>${recipe.categoryLabel}</span>
-                </li>`
-            )
-            .join("")}
-        </ol>
-      </div>
-    </section>
-  `;
-
-  const pages = groups
-    .map(
-      (group) => `
-        <section class="print-page">
-          <div class="print-section">
-            <p class="print-kicker">Recipes</p>
-            <h2>菜谱详情</h2>
-            ${group
-              .map(
-                (recipe) => `
-                  <article class="print-recipe">
-                    <div>
-                      <img src="${createRecipeImage(recipe)}" alt="${recipe.title} 配图" />
-                      <p class="recipe-card__category">${recipe.categoryLabel}</p>
-                      <h3>${recipe.title}</h3>
-                      <p>${recipe.blurb}</p>
-                      <div class="print-meta">
-                        <span>${recipe.time}</span>
-                        <span>${recipe.servings}</span>
-                        <span>${recipe.difficulty}</span>
-                        <span>${recipe.season}</span>
-                      </div>
-                    </div>
-                    <div class="print-column">
-                      <h4>配料与用量</h4>
-                      <ul>
-                        ${recipe.ingredients
-                          .map(([name, amount]) => `<li><strong>${name}</strong> · ${amount}</li>`)
-                          .join("")}
-                      </ul>
-                      <h4 style="margin-top:8mm;">制作过程</h4>
-                      <ol>
-                        ${recipe.steps.map((step) => `<li>${step}</li>`).join("")}
-                      </ol>
-                      <h4 style="margin-top:8mm;">厨房提示</h4>
-                      <p>${recipe.note}</p>
-                    </div>
-                  </article>`
-              )
-              .join("")}
-          </div>
-        </section>`
-    )
-    .join("");
-
-  return `${cover}${toc}${pages}`;
-}
-
 function setExportBusy(isBusy) {
   exportButtons.forEach((button) => {
     button.disabled = isBusy;
@@ -448,31 +568,8 @@ function createExportOverlay() {
   return overlay;
 }
 
-async function waitForExportAssets(root) {
-  const images = Array.from(root.querySelectorAll("img"));
-  await Promise.all(
-    images.map(
-      (image) =>
-        new Promise((resolve) => {
-          if (image.complete) {
-            resolve();
-            return;
-          }
-          image.addEventListener("load", resolve, { once: true });
-          image.addEventListener("error", resolve, { once: true });
-        })
-    )
-  );
-
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
-
-  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-}
-
 async function exportPdf() {
-  if (typeof window.html2canvas !== "function" || !window.jspdf?.jsPDF) {
+  if (!window.PDFLib || !window.fontkit) {
     window.alert("PDF 导出组件未加载完成，请刷新页面后重试。");
     return;
   }
@@ -482,61 +579,213 @@ async function exportPdf() {
     now.getDate()
   ).padStart(2, "0")}.pdf`;
 
-  const exportRoot = document.createElement("div");
-  exportRoot.className = "pdf-export-root print-root";
-  exportRoot.setAttribute("aria-hidden", "true");
-  exportRoot.innerHTML = buildPdfMarkup();
   const exportOverlay = createExportOverlay();
-  document.body.appendChild(exportRoot);
   document.body.appendChild(exportOverlay);
-  window.scrollTo({ top: 0, behavior: "auto" });
 
   setExportBusy(true);
 
   try {
-    await waitForExportAssets(exportRoot);
+    const { PDFLib, fontkit, fontBytes } = await loadRecipePdfAssets();
+    const pdfDoc = await PDFLib.PDFDocument.create();
+    pdfDoc.registerFontkit(fontkit);
+    const font = await pdfDoc.embedFont(fontBytes, { subset: true });
 
-    const pages = Array.from(exportRoot.querySelectorAll(".print-page"));
-    if (!pages.length) {
-      throw new Error("No printable pages found.");
-    }
-
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({
-      unit: "mm",
-      format: "a4",
-      orientation: "portrait",
-      compress: true,
+    const coverPage = pdfDoc.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+    coverPage.drawRectangle({
+      x: 0,
+      y: 0,
+      width: PDF_PAGE_WIDTH,
+      height: PDF_PAGE_HEIGHT,
+      color: pdfColor(PDFLib, "#f7f1e8"),
+    });
+    coverPage.drawRectangle({
+      x: PDF_MARGIN,
+      y: 160,
+      width: PDF_CONTENT_WIDTH,
+      height: PDF_PAGE_HEIGHT - 320,
+      color: pdfColor(PDFLib, "#b85b45"),
+    });
+    coverPage.drawText("Recipe Notebook", {
+      x: PDF_MARGIN + 28,
+      y: PDF_PAGE_HEIGHT - 240,
+      size: 30,
+      font,
+      color: PDFLib.rgb(1, 1, 1),
+    });
+    coverPage.drawText("家庭菜谱册 PDF", {
+      x: PDF_MARGIN + 28,
+      y: PDF_PAGE_HEIGHT - 286,
+      size: 22,
+      font,
+      color: PDFLib.rgb(1, 1, 1),
+    });
+    coverPage.drawText("包含目录、全部菜谱、配料用量、步骤与厨房提示", {
+      x: PDF_MARGIN + 28,
+      y: PDF_PAGE_HEIGHT - 330,
+      size: 13,
+      font,
+      color: PDFLib.rgb(1, 1, 1),
     });
 
-    for (const [index, page] of pages.entries()) {
-      const canvas = await window.html2canvas(page, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#f7f1e8",
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: page.scrollWidth,
-        windowHeight: page.scrollHeight,
+    const tocPage = pdfDoc.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+    tocPage.drawRectangle({
+      x: 0,
+      y: 0,
+      width: PDF_PAGE_WIDTH,
+      height: PDF_PAGE_HEIGHT,
+      color: pdfColor(PDFLib, "#f7f1e8"),
+    });
+    let tocY = PDF_PAGE_HEIGHT - PDF_MARGIN;
+    tocPage.drawText("目录", {
+      x: PDF_MARGIN,
+      y: tocY - 24,
+      size: 24,
+      font,
+      color: pdfColor(PDFLib, "#2d241f"),
+    });
+    tocY -= 54;
+    recipes.forEach((recipe, index) => {
+      tocPage.drawText(`${String(index + 1).padStart(2, "0")} · ${recipe.title}`, {
+        x: PDF_MARGIN,
+        y: tocY - 12,
+        size: 12,
+        font,
+        color: pdfColor(PDFLib, "#2d241f"),
+      });
+      tocPage.drawText(recipe.categoryLabel, {
+        x: PDF_PAGE_WIDTH - PDF_MARGIN - 170,
+        y: tocY - 12,
+        size: 10,
+        font,
+        color: pdfColor(PDFLib, "#6c6058"),
+      });
+      tocPage.drawLine({
+        start: { x: PDF_MARGIN, y: tocY - 18 },
+        end: { x: PDF_PAGE_WIDTH - PDF_MARGIN, y: tocY - 18 },
+        thickness: 0.8,
+        color: pdfColor(PDFLib, "#d8cab8"),
+      });
+      tocY -= 32;
+    });
+
+    recipes.forEach((recipe, recipeIndex) => {
+      const page = pdfDoc.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+      page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: PDF_PAGE_WIDTH,
+        height: PDF_PAGE_HEIGHT,
+        color: pdfColor(PDFLib, "#f7f1e8"),
       });
 
-      const imageData = canvas.toDataURL("image/jpeg", 0.96);
+      let cursorY = PDF_PAGE_HEIGHT - PDF_MARGIN;
+      cursorY = drawBanner(page, PDFLib, recipe, font, cursorY);
+      cursorY = drawMetaRow(page, PDFLib, recipe, font, cursorY);
+      cursorY = drawWrappedText(page, recipe.blurb, {
+        font,
+        size: 12,
+        x: PDF_MARGIN,
+        y: cursorY,
+        width: PDF_CONTENT_WIDTH,
+        lineHeight: 18,
+        color: pdfColor(PDFLib, "#6c6058"),
+      }) - 10;
 
-      if (index > 0) {
-        pdf.addPage();
-      }
+      let leftY = drawSectionTitle(page, PDFLib, "配料与用量", PDF_MARGIN, cursorY, PDF_COLUMN_WIDTH, font);
+      recipe.ingredients.forEach(([name, amount]) => {
+        page.drawText(name, {
+          x: PDF_MARGIN,
+          y: leftY - 11,
+          size: 10.5,
+          font,
+          color: pdfColor(PDFLib, "#2d241f"),
+        });
+        page.drawText(amount, {
+          x: PDF_MARGIN + PDF_COLUMN_WIDTH - Math.min(font.widthOfTextAtSize(amount, 10.5), PDF_COLUMN_WIDTH - 8),
+          y: leftY - 11,
+          size: 10.5,
+          font,
+          color: pdfColor(PDFLib, "#6c6058"),
+        });
+        page.drawLine({
+          start: { x: PDF_MARGIN, y: leftY - 16 },
+          end: { x: PDF_MARGIN + PDF_COLUMN_WIDTH, y: leftY - 16 },
+          thickness: 0.6,
+          color: pdfColor(PDFLib, "#e1d6ca"),
+        });
+        leftY -= 24;
+      });
 
-      pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
-    }
+      const rightX = PDF_MARGIN + PDF_COLUMN_WIDTH + PDF_COLUMN_GAP;
+      let rightY = drawSectionTitle(page, PDFLib, "制作过程", rightX, cursorY, PDF_COLUMN_WIDTH, font);
+      recipe.steps.forEach((step, index) => {
+        page.drawText(`${index + 1}.`, {
+          x: rightX,
+          y: rightY - 11,
+          size: 10.5,
+          font,
+          color: pdfColor(PDFLib, "#8f3d4e"),
+        });
+        rightY = drawWrappedText(page, step, {
+          font,
+          size: 10.5,
+          x: rightX + 18,
+          y: rightY,
+          width: PDF_COLUMN_WIDTH - 18,
+          lineHeight: 15,
+          color: pdfColor(PDFLib, "#2d241f"),
+        }) - 8;
+      });
 
-    pdf.save(filename);
+      const noteTopY = Math.min(leftY, rightY) - 6;
+      page.drawRectangle({
+        x: PDF_MARGIN,
+        y: noteTopY - 78,
+        width: PDF_CONTENT_WIDTH,
+        height: 78,
+        color: PDFLib.rgb(1, 1, 1),
+        borderColor: pdfColor(PDFLib, "#d8cab8"),
+        borderWidth: 1,
+      });
+      page.drawText("厨房提示", {
+        x: PDF_MARGIN + 16,
+        y: noteTopY - 20,
+        size: 12,
+        font,
+        color: pdfColor(PDFLib, "#8f3d4e"),
+      });
+      drawWrappedText(page, recipe.note, {
+        font,
+        size: 10.5,
+        x: PDF_MARGIN + 16,
+        y: noteTopY - 34,
+        width: PDF_CONTENT_WIDTH - 32,
+        lineHeight: 15,
+        color: pdfColor(PDFLib, "#6c6058"),
+      });
+
+      page.drawText(`Recipe Notebook · ${String(recipeIndex + 1).padStart(2, "0")}`, {
+        x: PDF_MARGIN,
+        y: 24,
+        size: 9,
+        font,
+        color: pdfColor(PDFLib, "#8b7b70"),
+      });
+    });
+
+    const pdfBytes = await pdfDoc.save();
+    const blob = new Blob([pdfBytes], { type: "application/pdf" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement("a");
+    downloadLink.href = downloadUrl;
+    downloadLink.download = filename;
+    downloadLink.click();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
   } catch (error) {
     window.alert("PDF 生成失败，请刷新页面后重试。");
   } finally {
     setExportBusy(false);
     exportOverlay.remove();
-    exportRoot.remove();
   }
 }
 

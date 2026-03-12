@@ -764,17 +764,6 @@ button {
   font-family: "Source Sans 3", sans-serif;
 }
 
-.pdf-export-root {
-  position: absolute;
-  left: 0;
-  top: 100vh;
-  width: 210mm;
-  background: #f7f1e8;
-  pointer-events: none;
-  opacity: 1;
-  overflow: hidden;
-}
-
 .pdf-export-overlay {
   position: fixed;
   inset: 0;
