@@ -432,7 +432,7 @@ function buildPdfMarkup() {
 function setExportBusy(isBusy) {
   exportButtons.forEach((button) => {
     button.disabled = isBusy;
-    button.textContent = isBusy ? "正在生成 PDF..." : button.id === "heroExportButton" ? "导出目录版 PDF" : "一键导出 PDF";
+    button.textContent = isBusy ? "正在生成 PDF..." : button.id === "heroExportButton" ? "下载目录版 PDF" : "下载 PDF 文件";
   });
 }
 
