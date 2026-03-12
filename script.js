@@ -341,8 +341,7 @@ function chunkRecipes(items, size) {
   return chunks;
 }
 
-function buildPrintDocument() {
-  const styleUrl = new URL("styles.css", window.location.href).href;
+function buildPdfMarkup() {
   const groups = chunkRecipes(recipes, 2);
   const now = new Date();
   const exportDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
@@ -427,43 +426,63 @@ function buildPrintDocument() {
     )
     .join("");
 
-  return `
-    <!DOCTYPE html>
-    <html lang="zh-CN">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Recipe Notebook PDF Export</title>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link
-          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-        <link rel="stylesheet" href="${styleUrl}" />
-      </head>
-      <body class="print-root">
-        ${cover}
-        ${toc}
-        ${pages}
-        <script>
-          window.addEventListener("load", () => {
-            setTimeout(() => window.print(), 300);
-          });
-        </script>
-      </body>
-    </html>`;
+  return `${cover}${toc}${pages}`;
 }
 
-function exportPdf() {
-  try {
-    sessionStorage.setItem("recipe-notebook-print-document", buildPrintDocument());
-  } catch (error) {
-    window.alert("打印内容暂时无法写入浏览器会话，请刷新页面后重试。");
+function setExportBusy(isBusy) {
+  exportButtons.forEach((button) => {
+    button.disabled = isBusy;
+    button.textContent = isBusy ? "正在生成 PDF..." : button.id === "heroExportButton" ? "导出目录版 PDF" : "一键导出 PDF";
+  });
+}
+
+async function exportPdf() {
+  if (typeof window.html2pdf !== "function") {
+    window.alert("PDF 导出组件未加载完成，请刷新页面后重试。");
     return;
   }
 
-  window.location.assign("./print.html");
+  const now = new Date();
+  const filename = `recipe-notebook-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate()
+  ).padStart(2, "0")}.pdf`;
+
+  const exportRoot = document.createElement("div");
+  exportRoot.className = "pdf-export-root print-root";
+  exportRoot.setAttribute("aria-hidden", "true");
+  exportRoot.innerHTML = buildPdfMarkup();
+  document.body.appendChild(exportRoot);
+
+  setExportBusy(true);
+
+  try {
+    await window.html2pdf()
+      .set({
+        filename,
+        margin: 0,
+        image: { type: "jpeg", quality: 0.96 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#f7f1e8",
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "portrait",
+        },
+        pagebreak: {
+          mode: ["css", "legacy"],
+        },
+      })
+      .from(exportRoot)
+      .save();
+  } catch (error) {
+    window.alert("PDF 生成失败，请刷新页面后重试。");
+  } finally {
+    setExportBusy(false);
+    exportRoot.remove();
+  }
 }
 
 function attachEvents() {

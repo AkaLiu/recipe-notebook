@@ -67,7 +67,7 @@
           <div class="board-card board-card--note">
             <span>导出说明</span>
             <small>
-              将打开排版好的打印页，包含目录、全部菜谱、步骤与用量，适合直接保存为 PDF。
+              会直接生成并下载带目录的 PDF 文件，包含全部菜谱、步骤与用量，不再依赖浏览器打印。
             </small>
           </div>
         </aside>
@@ -122,7 +122,7 @@
     <footer class="footer shell">
       <p>Recipe Notebook 为 GitHub Pages 设计，适合直接托管静态页面。</p>
       <p>
-        PDF 导出会进入专用打印页。浏览器中选择“保存为 PDF”即可得到带目录的菜谱文档。
+        PDF 导出会直接生成文件下载，得到带目录的菜谱文档，不包含浏览器打印页眉页脚。
       </p>
     </footer>
 
@@ -134,6 +134,7 @@
     </template>
 
     <script src="./recipe-data.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" referrerpolicy="no-referrer"></script>
     <script src="./script.js"></script>
   </body>
 </html>
