@@ -278,9 +278,9 @@ function drawMetaRow(page, PDFLib, recipe, font, y) {
 function loadRecipePdfAssets() {
   if (!recipePdfAssetsPromise) {
     recipePdfAssetsPromise = (async () => {
-      const fontResponse = await fetch("./vendor/SourceHanSansSC-Regular.otf?v=20260312d");
+      const fontResponse = await fetch("./vendor/NotoSansSC-wght.ttf?v=20260312e");
       if (!fontResponse.ok) {
-        throw new Error("Failed to load Source Han Sans font.");
+        throw new Error("Failed to load Noto Sans SC font.");
       }
       return {
         PDFLib: window.PDFLib,
@@ -588,7 +588,7 @@ async function exportPdf() {
     const { PDFLib, fontkit, fontBytes } = await loadRecipePdfAssets();
     const pdfDoc = await PDFLib.PDFDocument.create();
     pdfDoc.registerFontkit(fontkit);
-    const font = await pdfDoc.embedFont(fontBytes, { subset: true });
+    const font = await pdfDoc.embedFont(fontBytes, { subset: false });
 
     const coverPage = pdfDoc.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
     coverPage.drawRectangle({
