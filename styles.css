@@ -765,12 +765,15 @@ button {
 }
 
 .pdf-export-root {
-  position: fixed;
-  left: -99999px;
+  position: absolute;
+  left: 0;
   top: 0;
   width: 210mm;
+  background: #f7f1e8;
   pointer-events: none;
-  opacity: 0;
+  opacity: 1;
+  z-index: -1;
+  overflow: hidden;
 }
 
 .print-page {

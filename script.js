@@ -452,6 +452,7 @@ async function exportPdf() {
   exportRoot.setAttribute("aria-hidden", "true");
   exportRoot.innerHTML = buildPdfMarkup();
   document.body.appendChild(exportRoot);
+  window.scrollTo({ top: 0, behavior: "auto" });
 
   setExportBusy(true);
 
