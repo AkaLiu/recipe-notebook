@@ -436,8 +436,43 @@ function setExportBusy(isBusy) {
   });
 }
 
+function createExportOverlay() {
+  const overlay = document.createElement("div");
+  overlay.className = "pdf-export-overlay";
+  overlay.innerHTML = `
+    <div class="pdf-export-overlay__panel">
+      <strong>正在生成 PDF 文件</strong>
+      <span>文档页数较多，首次生成可能需要几秒。</span>
+    </div>
+  `;
+  return overlay;
+}
+
+async function waitForExportAssets(root) {
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise((resolve) => {
+          if (image.complete) {
+            resolve();
+            return;
+          }
+          image.addEventListener("load", resolve, { once: true });
+          image.addEventListener("error", resolve, { once: true });
+        })
+    )
+  );
+
+  if (document.fonts?.ready) {
+    await document.fonts.ready;
+  }
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
 async function exportPdf() {
-  if (typeof window.html2pdf !== "function") {
+  if (typeof window.html2canvas !== "function" || !window.jspdf?.jsPDF) {
     window.alert("PDF 导出组件未加载完成，请刷新页面后重试。");
     return;
   }
@@ -451,37 +486,56 @@ async function exportPdf() {
   exportRoot.className = "pdf-export-root print-root";
   exportRoot.setAttribute("aria-hidden", "true");
   exportRoot.innerHTML = buildPdfMarkup();
+  const exportOverlay = createExportOverlay();
   document.body.appendChild(exportRoot);
+  document.body.appendChild(exportOverlay);
   window.scrollTo({ top: 0, behavior: "auto" });
 
   setExportBusy(true);
 
   try {
-    await window.html2pdf()
-      .set({
-        filename,
-        margin: 0,
-        image: { type: "jpeg", quality: 0.96 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#f7f1e8",
-        },
-        jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait",
-        },
-        pagebreak: {
-          mode: ["css", "legacy"],
-        },
-      })
-      .from(exportRoot)
-      .save();
+    await waitForExportAssets(exportRoot);
+
+    const pages = Array.from(exportRoot.querySelectorAll(".print-page"));
+    if (!pages.length) {
+      throw new Error("No printable pages found.");
+    }
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+      unit: "mm",
+      format: "a4",
+      orientation: "portrait",
+      compress: true,
+    });
+
+    for (const [index, page] of pages.entries()) {
+      const canvas = await window.html2canvas(page, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f7f1e8",
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: page.scrollWidth,
+        windowHeight: page.scrollHeight,
+      });
+
+      const imageData = canvas.toDataURL("image/jpeg", 0.96);
+
+      if (index > 0) {
+        pdf.addPage();
+      }
+
+      pdf.addImage(imageData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
+    }
+
+    pdf.save(filename);
   } catch (error) {
     window.alert("PDF 生成失败，请刷新页面后重试。");
   } finally {
     setExportBusy(false);
+    exportOverlay.remove();
     exportRoot.remove();
   }
 }
