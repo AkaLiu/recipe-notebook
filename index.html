@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Recipe Notebook | 家庭菜谱册</title>
+    <meta
+      name="description"
+      content="按菜系整理的家庭菜谱册，支持收藏常做菜，并可一键导出带目录的 PDF 菜谱。"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="topbar__inner shell">
+        <a class="brand" href="#home" aria-label="Recipe Notebook 首页">
+          <span class="brand__mark">RN</span>
+          <span class="brand__text">
+            <strong>Recipe Notebook</strong>
+            <small>家庭菜谱册</small>
+          </span>
+        </a>
+        <nav class="topbar__nav" aria-label="主导航">
+          <a href="#liked">喜欢</a>
+          <a href="#catalog">菜谱</a>
+          <a href="#details">做法</a>
+        </nav>
+        <button class="export-button" id="exportPdfButton" type="button">
+          一键导出 PDF
+        </button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero shell">
+        <div class="hero__intro">
+          <p class="eyebrow">Kitchen archive / 11 cuisines</p>
+          <h1>像翻一本手边常用的菜谱册一样，找今晚要做的菜。</h1>
+          <p class="hero__body">
+            首页按菜系索引，每道菜都带有配图、用量、步骤和备菜提示。点亮喜欢后，常做菜会被抬到首页专属区域，方便重复下厨。
+          </p>
+          <div class="hero__actions">
+            <button class="hero__primary" id="heroExportButton" type="button">
+              导出目录版 PDF
+            </button>
+            <a class="hero__secondary" href="#catalog">开始挑菜</a>
+          </div>
+        </div>
+        <aside class="hero__board" aria-label="概览">
+          <div class="board-card">
+            <span>已收录菜谱</span>
+            <strong id="recipeCount">11</strong>
+            <small>覆盖中餐、欧陆、南洋、甜点与饮品</small>
+          </div>
+          <div class="board-card">
+            <span>当前已喜欢</span>
+            <strong id="likedCount">0</strong>
+            <small>喜欢的菜会固定显示在首页 liked 区域</small>
+          </div>
+          <div class="board-card board-card--note">
+            <span>导出说明</span>
+            <small>
+              将打开排版好的打印页，包含目录、全部菜谱、步骤与用量，适合直接保存为 PDF。
+            </small>
+          </div>
+        </aside>
+      </section>
+
+      <section class="liked shell" id="liked">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Liked shelf</p>
+            <h2>常做菜专区</h2>
+          </div>
+          <p class="section-heading__note">
+            点亮卡片上的 like 按钮后，这里会自动优先展示。
+          </p>
+        </div>
+        <div class="liked__grid" id="likedGrid" aria-live="polite"></div>
+      </section>
+
+      <section class="catalog shell" id="catalog">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Cuisine index</p>
+            <h2>菜系分类</h2>
+          </div>
+          <p class="section-heading__note">
+            按菜系浏览，再点开卡片查看对应食材用量与制作过程。
+          </p>
+        </div>
+
+        <div class="filters" id="categoryFilters" aria-label="菜系筛选"></div>
+
+        <div class="catalog__layout">
+          <div class="catalog__spotlight" id="spotlightCard"></div>
+          <div class="catalog__grid" id="recipeGrid" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="details shell" id="details">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Recipe details</p>
+            <h2>制作过程与用量</h2>
+          </div>
+          <p class="section-heading__note">
+            这里会显示当前选中菜谱的完整步骤、配料克数与出菜提示。
+          </p>
+        </div>
+        <article class="recipe-sheet" id="recipeSheet" aria-live="polite"></article>
+      </section>
+    </main>
+
+    <footer class="footer shell">
+      <p>Recipe Notebook 为 GitHub Pages 设计，适合直接托管静态页面。</p>
+      <p>
+        PDF 导出会打开新的打印页面。浏览器中选择“保存为 PDF”即可得到带目录的菜谱文档。
+      </p>
+    </footer>
+
+    <template id="emptyLikedTemplate">
+      <div class="empty-state">
+        <h3>还没有喜欢的菜</h3>
+        <p>先从下面挑一道菜，点击卡片右上的 like 按钮，这里就会出现你的常做清单。</p>
+      </div>
+    </template>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
