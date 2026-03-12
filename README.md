@@ -29,6 +29,6 @@ python3 -m http.server 8000
 4. Branch 选择 `main`，Folder 选择 `/ (root)`。
 5. 保存后等待发布。
 
-### 方式 2：使用 GitHub Actions
+### 推荐方式：发布 `main` 分支根目录
 
-仓库里已包含工作流文件，推送到默认分支后即可自动发布到 GitHub Pages。
+这是纯静态站点，不需要构建流程。把 Pages 的 Source 设成 `Deploy from a branch`，Branch 选 `main`，Folder 选 `/ (root)` 即可。
